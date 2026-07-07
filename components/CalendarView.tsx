@@ -20,8 +20,17 @@ export default function CalendarView() {
   const [error, setError] = useState<string | null>(null);
 
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+  const [monthlyChecked, setMonthlyChecked] = useState(false);
+
+  // 月が変わって最初の訪問なら、伴走者が「月の問い」を用意する(サーバー側で判定)
+  useEffect(() => {
+    fetch("/api/monthly", { method: "POST" })
+      .catch(() => {})
+      .finally(() => setMonthlyChecked(true));
+  }, []);
 
   useEffect(() => {
+    if (!monthlyChecked) return;
     fetch(`/api/calendar?month=${monthKey}`)
       .then((res) => res.json())
       .then((json) => {
@@ -32,7 +41,7 @@ export default function CalendarView() {
         }
       })
       .catch(() => setError("通信に失敗しました"));
-  }, [monthKey]);
+  }, [monthKey, monthlyChecked]);
 
   const moveMonth = (diff: number) => {
     const d = new Date(year, month - 1 + diff, 1);
@@ -50,12 +59,13 @@ export default function CalendarView() {
 
   return (
     <div className="mx-auto w-full max-w-md p-4">
-      <div className="pt-4 text-center">
+      {/* 題字に触れると表紙(戻ってくるための頁)が開く */}
+      <Link href="/cover" className="block pt-4 text-center">
         <h1 className="text-lg tracking-[0.3em]">TOI</h1>
         <p className="font-mincho text-[10px] text-sumi-light">
           〜Questions create your future.〜
         </p>
-      </div>
+      </Link>
       <header className="flex items-center justify-between py-4">
         <button
           onClick={() => moveMonth(-1)}

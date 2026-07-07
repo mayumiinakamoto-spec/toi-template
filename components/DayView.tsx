@@ -3,10 +3,38 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Entry } from "@/lib/types";
+import {
+  PERIODIC_LABELS,
+  HALF_YEAR_MARKER,
+  YEAR_MARKER,
+  type Entry,
+} from "@/lib/types";
 import { jstTime, todayJst } from "@/lib/jst";
 
 const MODE_LABEL = { toi: "問い", jogen: "助言" } as const;
+
+// 節目の問い(月・半年・年)は本文先頭の目印で見分け、ラベルと本文に分解する。
+// milestone = 半年・年の問い(見た目に静かな格を付ける)
+function coachLabelAndBody(entry: Entry): {
+  label: string;
+  body: string;
+  milestone: boolean;
+} {
+  for (const [marker, label] of Object.entries(PERIODIC_LABELS)) {
+    if (entry.body.startsWith(marker)) {
+      return {
+        label,
+        body: entry.body.slice(marker.length).trimStart(),
+        milestone: marker === HALF_YEAR_MARKER || marker === YEAR_MARKER,
+      };
+    }
+  }
+  return {
+    label: entry.mode ? MODE_LABEL[entry.mode] : "伴走者",
+    body: entry.body,
+    milestone: false,
+  };
+}
 
 export default function DayView({ date }: { date: string }) {
   const router = useRouter();
@@ -66,6 +94,17 @@ export default function DayView({ date }: { date: string }) {
   const saveOnly = () => submit("/api/entries", { body: text });
   const sendToCoach = () => submit("/api/coach", { body: text, mode });
 
+  const deleteEntry = async (id: string) => {
+    if (!window.confirm("この記録を削除します。よろしいですか?")) return;
+    const res = await fetch(`/api/entries?id=${id}`, { method: "DELETE" });
+    const json = await res.json();
+    if (json.error) {
+      setError(json.error);
+      return;
+    }
+    load();
+  };
+
   const [y, m, d] = date.split("-");
 
   return (
@@ -106,25 +145,46 @@ export default function DayView({ date }: { date: string }) {
                   {entry.body}
                 </p>
               ) : (
-                <div
-                  className={`rounded-lg border p-3 ${
-                    entry.mode === "jogen"
-                      ? "border-matsuba/40 bg-matsuba/5"
-                      : "border-indigo-toi/40 bg-indigo-toi/5"
-                  }`}
-                >
-                  <span
-                    className={`mb-1 inline-block rounded px-1.5 py-0.5 text-[10px] text-white ${
-                      entry.mode === "jogen" ? "bg-matsuba" : "bg-indigo-toi"
-                    }`}
-                  >
-                    {entry.mode ? MODE_LABEL[entry.mode] : "伴走者"}
-                  </span>
-                  <p className="whitespace-pre-wrap font-mincho text-sm leading-relaxed">
-                    {entry.body}
-                  </p>
-                </div>
+                (() => {
+                  const coach = coachLabelAndBody(entry);
+                  return (
+                    <div
+                      className={`rounded-lg p-3 ${
+                        coach.milestone
+                          ? "border-[3px] border-double border-kincha/60 bg-kincha/5"
+                          : entry.mode === "jogen"
+                            ? "border border-matsuba/40 bg-matsuba/5"
+                            : "border border-indigo-toi/40 bg-indigo-toi/5"
+                      }`}
+                    >
+                      <span
+                        className={`mb-1 inline-block rounded px-1.5 py-0.5 text-[10px] text-white ${
+                          coach.milestone
+                            ? "bg-kincha"
+                            : entry.mode === "jogen"
+                              ? "bg-matsuba"
+                              : "bg-indigo-toi"
+                        }`}
+                      >
+                        {coach.label}
+                      </span>
+                      <p
+                        className={`whitespace-pre-wrap font-mincho leading-relaxed ${
+                          coach.milestone ? "text-[15px]" : "text-sm"
+                        }`}
+                      >
+                        {coach.body}
+                      </p>
+                    </div>
+                  );
+                })()
               )}
+              <button
+                onClick={() => deleteEntry(entry.id)}
+                className="ml-auto mt-1 block px-1 text-[10px] text-sumi-light/60 active:text-red-700"
+              >
+                削除
+              </button>
             </li>
           ))}
         </ol>

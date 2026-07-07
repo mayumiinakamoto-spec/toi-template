@@ -9,6 +9,8 @@
   --ai-indigo: #274a78;
   /* 助言モード: 松葉色 */
   --matsuba: #567050;
+  /* 節目の問い(半年・年): 金茶色 */
+  --kincha: #a8792f;
 }
 
 @theme inline {
@@ -17,6 +19,7 @@
   --color-sumi-light: var(--sumi-light);
   --color-indigo-toi: var(--ai-indigo);
   --color-matsuba: var(--matsuba);
+  --color-kincha: var(--kincha);
   --font-sans: var(--font-noto-sans);
   --font-mincho: var(--font-noto-serif);
 }
@@ -25,4 +28,20 @@ body {
   background: var(--washi);
   color: var(--sumi);
   font-family: var(--font-noto-sans), sans-serif;
+}
+
+/* 表紙の呼吸の円: 吸う(ふくらむ)→ 吐く(しぼむ)を約11秒で */
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.35;
+  }
+  40% {
+    transform: scale(1.4);
+    opacity: 0.75;
+  }
+}
+.breathe-circle {
+  animation: breathe 11s ease-in-out infinite;
 }
