@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+:root {
+  /* 和紙のような明るい背景と墨色の文字 */
+  --washi: #f7f4ec;
+  --sumi: #2b2a28;
+  --sumi-light: #6b6862;
+  /* 問いモード: 藍色 */
+  --ai-indigo: #274a78;
+  /* 助言モード: 松葉色 */
+  --matsuba: #567050;
+}
+
+@theme inline {
+  --color-washi: var(--washi);
+  --color-sumi: var(--sumi);
+  --color-sumi-light: var(--sumi-light);
+  --color-indigo-toi: var(--ai-indigo);
+  --color-matsuba: var(--matsuba);
+  --font-sans: var(--font-noto-sans);
+  --font-mincho: var(--font-noto-serif);
+}
+
+body {
+  background: var(--washi);
+  color: var(--sumi);
+  font-family: var(--font-noto-sans), sans-serif;
+}
