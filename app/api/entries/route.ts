@@ -47,6 +47,33 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// PATCH /api/entries  { id: "...", body: "..." } → 記録の本文を書き換える
+export async function PATCH(request: NextRequest) {
+  const { id, body } = await request.json().catch(() => ({}));
+  if (
+    typeof id !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)
+  ) {
+    return NextResponse.json({ error: "idが不正です" }, { status: 400 });
+  }
+  if (typeof body !== "string" || body.trim() === "") {
+    return NextResponse.json({ error: "本文が空です" }, { status: 400 });
+  }
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("entries")
+      .update({ body: body.trim() })
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return NextResponse.json({ entry: data });
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+  }
+}
+
 // DELETE /api/entries?id=xxx → 記録を1件削除(添付写真もStorageから消す)
 export async function DELETE(request: NextRequest) {
   const id = request.nextUrl.searchParams.get("id");

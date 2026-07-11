@@ -50,6 +50,10 @@ export default function DayView({ date }: { date: string }) {
   const [saving, setSaving] = useState(false);
   const [writingDiary, setWritingDiary] = useState(false);
   const [photos, setPhotos] = useState<File[]>([]);
+  // 今日の記の手動編集(編集中の記録IDと下書きテキスト)
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -147,6 +151,36 @@ export default function DayView({ date }: { date: string }) {
     }
   };
 
+  const startEdit = (entry: Entry) => {
+    setEditingId(entry.id);
+    setEditingText(entry.body.slice(DIARY_MARKER.length).trimStart());
+  };
+
+  const saveEdit = async () => {
+    if (!editingId || editingText.trim() === "" || savingEdit) return;
+    setSavingEdit(true);
+    try {
+      const res = await fetch("/api/entries", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingId,
+          body: `${DIARY_MARKER}${editingText.trim()}`,
+        }),
+      });
+      const json = await res.json();
+      if (json.error) {
+        setError(json.error);
+        return;
+      }
+      setEditingId(null);
+      setEditingText("");
+      load();
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const deleteEntry = async (id: string) => {
     if (!window.confirm("この記録を削除します。よろしいですか?")) return;
     const res = await fetch(`/api/entries?id=${id}`, { method: "DELETE" });
@@ -195,14 +229,50 @@ export default function DayView({ date }: { date: string }) {
               <span className="absolute -left-[5px] top-2 h-2 w-2 rounded-full bg-sumi/60" />
               {entry.role === "user" ? (
                 entry.body.startsWith(DIARY_MARKER) ? (
-                  // 今日の記(清書された一日の日記)
+                  // 今日の記(清書された一日の日記)。編集ボタンで手直しできる
                   <div className="rounded-lg border border-sumi/30 bg-white/40 p-3">
-                    <span className="mb-1 inline-block rounded bg-sumi px-1.5 py-0.5 text-[10px] text-white">
-                      今日の記
-                    </span>
-                    <p className="whitespace-pre-wrap font-mincho text-sm leading-loose">
-                      {entry.body.slice(DIARY_MARKER.length).trimStart()}
-                    </p>
+                    <div className="mb-1 flex items-center">
+                      <span className="inline-block rounded bg-sumi px-1.5 py-0.5 text-[10px] text-white">
+                        今日の記
+                      </span>
+                      {editingId !== entry.id && (
+                        <button
+                          onClick={() => startEdit(entry)}
+                          className="ml-auto px-1 text-[10px] text-sumi-light/60 active:text-sumi"
+                        >
+                          編集
+                        </button>
+                      )}
+                    </div>
+                    {editingId === entry.id ? (
+                      <div>
+                        <textarea
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                          rows={Math.max(4, editingText.split("\n").length + 1)}
+                          className="w-full resize-none rounded border border-sumi/20 bg-white/80 p-2 font-mincho text-sm leading-loose outline-none focus:border-sumi/40"
+                        />
+                        <div className="mt-1 flex justify-end gap-2">
+                          <button
+                            onClick={() => setEditingId(null)}
+                            className="rounded border border-sumi/30 px-3 py-1 text-xs text-sumi-light"
+                          >
+                            やめる
+                          </button>
+                          <button
+                            onClick={saveEdit}
+                            disabled={savingEdit || editingText.trim() === ""}
+                            className="rounded bg-sumi px-3 py-1 text-xs text-white disabled:opacity-40"
+                          >
+                            {savingEdit ? "保存中…" : "保存"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap font-mincho text-sm leading-loose">
+                        {entry.body.slice(DIARY_MARKER.length).trimStart()}
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded-lg border border-sumi/10 bg-white/60 p-3">
