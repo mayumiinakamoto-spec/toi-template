@@ -16,4 +16,6 @@ export type Entry = {
   role: "user" | "coach";
   mode: "toi" | "jogen" | null;
   body: string;
+  // GETで返る際は表示用の署名付きURL。保存時はStorageのパスを渡す
+  photos: string[];
 };

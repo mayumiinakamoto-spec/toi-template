@@ -25,10 +25,10 @@ function formatEntry(e: Entry): string {
   return `[${e.entry_date} ${jstTime(e.created_at)}] ${who}:\n${e.body}`;
 }
 
-// POST /api/coach  { body: "...", mode: "toi" | "jogen" }
+// POST /api/coach  { body: "...", mode: "toi" | "jogen", photos?: string[] }
 // 記録を保存した上で、AI(伴走者)が応答する
 export async function POST(request: NextRequest) {
-  const { body, mode } = await request.json().catch(() => ({}));
+  const { body, mode, photos } = await request.json().catch(() => ({}));
   if (typeof body !== "string" || body.trim() === "") {
     return NextResponse.json({ error: "本文が空です" }, { status: 400 });
   }
@@ -40,10 +40,16 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabase();
     const today = todayJst();
 
-    // 1. 利用者の記録を保存
+    // 1. 利用者の記録を保存(伴走者は写真を見ない。読むのは文章だけ)
     const { data: userEntry, error: saveError } = await supabase
       .from("entries")
-      .insert({ entry_date: today, role: "user", mode: null, body: body.trim() })
+      .insert({
+        entry_date: today,
+        role: "user",
+        mode: null,
+        body: body.trim(),
+        photos: Array.isArray(photos) ? photos : [],
+      })
       .select()
       .single();
     if (saveError) throw new Error(saveError.message);

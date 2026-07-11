@@ -12,6 +12,7 @@ import {
 import { jstTime, todayJst } from "@/lib/jst";
 
 const MODE_LABEL = { toi: "問い", jogen: "助言" } as const;
+const MAX_PHOTOS = 4;
 
 // 節目の問い(月・半年・年)は本文先頭の目印で見分け、ラベルと本文に分解する。
 // milestone = 半年・年の問い(見た目に静かな格を付ける)
@@ -46,7 +47,9 @@ export default function DayView({ date }: { date: string }) {
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"toi" | "jogen">("toi");
   const [saving, setSaving] = useState(false);
+  const [photos, setPhotos] = useState<File[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
     fetch(`/api/entries?date=${date}`)
@@ -63,15 +66,36 @@ export default function DayView({ date }: { date: string }) {
 
   useEffect(load, [load]);
 
+  const addPhotos = (files: FileList | null) => {
+    if (!files) return;
+    setPhotos((prev) => [...prev, ...Array.from(files)].slice(0, MAX_PHOTOS));
+  };
+  const removePhoto = (index: number) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+  };
+
   // 保存の共通処理。url = "/api/entries"(記録のみ) or "/api/coach"(伴走者に送る)
-  const submit = async (url: string, payload: object) => {
+  const submit = async (url: string, payload: Record<string, unknown>) => {
     if (text.trim() === "" || saving) return;
     setSaving(true);
     try {
+      let photoPaths: string[] = [];
+      if (photos.length > 0) {
+        const form = new FormData();
+        photos.forEach((f) => form.append("photos", f));
+        const uploadRes = await fetch("/api/photos", { method: "POST", body: form });
+        const uploadJson = await uploadRes.json();
+        if (uploadJson.error) {
+          setError(uploadJson.error);
+          return;
+        }
+        photoPaths = uploadJson.paths;
+      }
+
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, photos: photoPaths }),
       });
       const json = await res.json();
       if (json.error) {
@@ -79,6 +103,7 @@ export default function DayView({ date }: { date: string }) {
         return;
       }
       setText("");
+      setPhotos([]);
       if (isToday) {
         load();
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
@@ -141,9 +166,26 @@ export default function DayView({ date }: { date: string }) {
               </span>
               <span className="absolute -left-[5px] top-2 h-2 w-2 rounded-full bg-sumi/60" />
               {entry.role === "user" ? (
-                <p className="whitespace-pre-wrap rounded-lg border border-sumi/10 bg-white/60 p-3 text-sm leading-relaxed">
-                  {entry.body}
-                </p>
+                <div className="rounded-lg border border-sumi/10 bg-white/60 p-3">
+                  {entry.photos.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      {entry.photos.map((url) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={url}
+                          src={url}
+                          alt=""
+                          className="h-20 w-20 rounded object-cover"
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {entry.body && (
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                      {entry.body}
+                    </p>
+                  )}
+                </div>
               ) : (
                 (() => {
                   const coach = coachLabelAndBody(entry);
@@ -199,6 +241,27 @@ export default function DayView({ date }: { date: string }) {
               ※ 保存は今日({today})の記録になります
             </p>
           )}
+          {photos.length > 0 && (
+            <div className="mb-2 flex gap-2">
+              {photos.map((file, i) => (
+                <div key={i} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={URL.createObjectURL(file)}
+                    alt=""
+                    className="h-16 w-16 rounded object-cover"
+                  />
+                  <button
+                    onClick={() => removePhoto(i)}
+                    className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-sumi text-[10px] text-white"
+                    aria-label="写真を外す"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -207,7 +270,7 @@ export default function DayView({ date }: { date: string }) {
             className="w-full resize-none rounded-lg border border-sumi/20 bg-white/80 p-3 text-sm outline-none focus:border-sumi/40"
           />
           <div className="mt-2 flex items-center gap-2">
-            {/* 問い/助言 モード切替(AI応答はステップ3で有効化) */}
+            {/* 問い/助言 モード切替 */}
             <button
               onClick={() => setMode(mode === "toi" ? "jogen" : "toi")}
               className={`rounded-full border px-3 py-1.5 text-xs ${
@@ -217,6 +280,24 @@ export default function DayView({ date }: { date: string }) {
               }`}
             >
               {MODE_LABEL[mode]}モード
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                addPhotos(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={photos.length >= MAX_PHOTOS}
+              className="rounded-full border border-sumi/30 px-3 py-1.5 text-xs text-sumi-light disabled:opacity-40"
+            >
+              📷{photos.length > 0 ? ` ${photos.length}` : ""}
             </button>
             <div className="flex-1" />
             <button

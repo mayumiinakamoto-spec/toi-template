@@ -40,18 +40,24 @@ npm install
 3. 左メニューの **SQL Editor** を開き、下のSQLを貼り付けて **Run**:
 
 ```sql
+-- 記録の入れ物
 create table entries (
   id uuid primary key default gen_random_uuid(),
   created_at timestamptz not null default now(),
   entry_date date not null,
   role text not null check (role in ('user', 'coach')),
   mode text check (mode in ('toi', 'jogen')),
-  body text not null
+  body text not null,
+  photos text[] not null default '{}'
 );
 
 create index entries_entry_date_idx on entries (entry_date);
 
 alter table entries enable row level security;
+
+-- 写真の置き場所(非公開)
+insert into storage.buckets (id, name, public)
+values ('photos', 'photos', false);
 ```
 
 「Success. No rows returned」と出ればOK。
