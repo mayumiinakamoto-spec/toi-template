@@ -42,6 +42,7 @@ export default function DayView({ date }: { date: string }) {
   const router = useRouter();
   const today = todayJst();
   const isToday = date === today;
+  const isFuture = date > today; // 未来の頁には書けない(書くと今日の記録になる)
 
   const [entries, setEntries] = useState<Entry[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -101,7 +102,12 @@ export default function DayView({ date }: { date: string }) {
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, photos: photoPaths }),
+        body: JSON.stringify({
+          ...payload,
+          photos: photoPaths,
+          // 過去の頁ではその日の記録として保存(未来の頁は今日扱い)
+          ...(isToday || isFuture ? {} : { date }),
+        }),
       });
       const json = await res.json();
       if (json.error) {
@@ -110,12 +116,12 @@ export default function DayView({ date }: { date: string }) {
       }
       setText("");
       setPhotos([]);
-      if (isToday) {
+      if (isFuture) {
+        // 未来の頁から書いた分は今日に保存されるので、今日の頁へ
+        router.push(`/day/${today}`);
+      } else {
         load();
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-      } else {
-        // 過去の日付を見ていても、保存先は常に「今日」
-        router.push(`/day/${today}`);
       }
     } finally {
       setSaving(false);
@@ -133,12 +139,16 @@ export default function DayView({ date }: { date: string }) {
     );
     if (
       hasDiary &&
-      !window.confirm("今日の記を書き直します。前の清書は置き換わります。よろしいですか?")
+      !window.confirm("この日の記を書き直します。前の清書は置き換わります。よろしいですか?")
     )
       return;
     setWritingDiary(true);
     try {
-      const res = await fetch("/api/diary", { method: "POST" });
+      const res = await fetch("/api/diary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(isToday ? {} : { date }),
+      });
       const json = await res.json();
       if (json.error) {
         setError(json.error);
@@ -340,7 +350,7 @@ export default function DayView({ date }: { date: string }) {
             </li>
           ))}
         </ol>
-        {isToday &&
+        {!isFuture &&
           entries.some(
             (e) => e.role === "user" && !e.body.startsWith(DIARY_MARKER)
           ) && (
@@ -350,7 +360,11 @@ export default function DayView({ date }: { date: string }) {
                 disabled={writingDiary}
                 className="rounded-full border border-sumi/30 px-4 py-2 font-mincho text-xs text-sumi-light disabled:opacity-40"
               >
-                {writingDiary ? "つづっています…" : "今日の記をつづる"}
+                {writingDiary
+                  ? "つづっています…"
+                  : isToday
+                    ? "今日の記をつづる"
+                    : "この日の記をつづる"}
               </button>
             </div>
           )}
@@ -362,7 +376,9 @@ export default function DayView({ date }: { date: string }) {
         <div className="mx-auto max-w-md">
           {!isToday && (
             <p className="mb-1 text-center text-[11px] text-sumi-light">
-              ※ 保存は今日({today})の記録になります
+              {isFuture
+                ? `※ 保存は今日(${today})の記録になります`
+                : `※ この日(${date})の記録として保存されます`}
             </p>
           )}
           {photos.length > 0 && (

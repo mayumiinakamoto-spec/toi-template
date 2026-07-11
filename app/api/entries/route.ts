@@ -101,18 +101,30 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
-// POST /api/entries  { body: "...", photos?: string[] } → 「記録のみ」保存。日付は常に日本時間の今日
+// POST /api/entries  { body: "...", photos?: string[], date?: "YYYY-MM-DD" }
+// 「記録のみ」保存。dateを渡すと過去の日付の記録として保存できる(未来は不可)
 export async function POST(request: NextRequest) {
-  const { body, photos } = await request.json().catch(() => ({}));
+  const { body, photos, date } = await request.json().catch(() => ({}));
   if (typeof body !== "string" || body.trim() === "") {
     return NextResponse.json({ error: "本文が空です" }, { status: 400 });
+  }
+  const today = todayJst();
+  let entryDate = today;
+  if (date !== undefined) {
+    if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return NextResponse.json({ error: "dateが不正です" }, { status: 400 });
+    }
+    if (date > today) {
+      return NextResponse.json({ error: "未来の日付には記録できません" }, { status: 400 });
+    }
+    entryDate = date;
   }
   try {
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from("entries")
       .insert({
-        entry_date: todayJst(),
+        entry_date: entryDate,
         role: "user",
         mode: null,
         body: body.trim(),

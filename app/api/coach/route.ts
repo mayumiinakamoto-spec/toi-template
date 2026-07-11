@@ -25,26 +25,36 @@ function formatEntry(e: Entry): string {
   return `[${e.entry_date} ${jstTime(e.created_at)}] ${who}:\n${e.body}`;
 }
 
-// POST /api/coach  { body: "...", mode: "toi" | "jogen", photos?: string[] }
-// 記録を保存した上で、AI(伴走者)が応答する
+// POST /api/coach  { body: "...", mode: "toi" | "jogen", photos?: string[], date?: "YYYY-MM-DD" }
+// 記録を保存した上で、AI(伴走者)が応答する。dateで過去の日付として保存できる(未来は不可)
 export async function POST(request: NextRequest) {
-  const { body, mode, photos } = await request.json().catch(() => ({}));
+  const { body, mode, photos, date } = await request.json().catch(() => ({}));
   if (typeof body !== "string" || body.trim() === "") {
     return NextResponse.json({ error: "本文が空です" }, { status: 400 });
   }
   if (mode !== "toi" && mode !== "jogen") {
     return NextResponse.json({ error: "modeはtoiかjogen" }, { status: 400 });
   }
+  const today = todayJst();
+  let entryDate = today;
+  if (date !== undefined) {
+    if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return NextResponse.json({ error: "dateが不正です" }, { status: 400 });
+    }
+    if (date > today) {
+      return NextResponse.json({ error: "未来の日付には記録できません" }, { status: 400 });
+    }
+    entryDate = date;
+  }
 
   try {
     const supabase = getSupabase();
-    const today = todayJst();
 
     // 1. 利用者の記録を保存(伴走者は写真を見ない。読むのは文章だけ)
     const { data: userEntry, error: saveError } = await supabase
       .from("entries")
       .insert({
-        entry_date: today,
+        entry_date: entryDate,
         role: "user",
         mode: null,
         body: body.trim(),
@@ -96,10 +106,10 @@ export async function POST(request: NextRequest) {
       .trim();
     if (replyText === "") throw new Error("AIの応答が空でした");
 
-    // 5. 伴走者の応答を保存
+    // 5. 伴走者の応答を保存(利用者の記録と同じ日付に並べる)
     const { data: coachEntry, error: coachError } = await supabase
       .from("entries")
-      .insert({ entry_date: today, role: "coach", mode, body: replyText })
+      .insert({ entry_date: entryDate, role: "coach", mode, body: replyText })
       .select()
       .single();
     if (coachError) throw new Error(coachError.message);
