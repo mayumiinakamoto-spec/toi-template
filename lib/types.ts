@@ -3,6 +3,9 @@ export const MONTHLY_MARKER = "【月の問い】";
 export const HALF_YEAR_MARKER = "【半年の問い】";
 export const YEAR_MARKER = "【年の問い】";
 
+// 今日の記(1日分の粒をAIが本人の声で清書したもの)。role=userの記録に付く
+export const DIARY_MARKER = "【今日の記】";
+
 export const PERIODIC_LABELS: Record<string, string> = {
   [MONTHLY_MARKER]: "月の問い",
   [HALF_YEAR_MARKER]: "半年の問い",

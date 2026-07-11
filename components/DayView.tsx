@@ -7,6 +7,7 @@ import {
   PERIODIC_LABELS,
   HALF_YEAR_MARKER,
   YEAR_MARKER,
+  DIARY_MARKER,
   type Entry,
 } from "@/lib/types";
 import { jstTime, todayJst } from "@/lib/jst";
@@ -47,6 +48,7 @@ export default function DayView({ date }: { date: string }) {
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"toi" | "jogen">("toi");
   const [saving, setSaving] = useState(false);
+  const [writingDiary, setWritingDiary] = useState(false);
   const [photos, setPhotos] = useState<File[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -119,6 +121,32 @@ export default function DayView({ date }: { date: string }) {
   const saveOnly = () => submit("/api/entries", { body: text });
   const sendToCoach = () => submit("/api/coach", { body: text, mode });
 
+  // 今日の粒を、本人の声の一本の日記に清書する(再実行で清書だけ置き換え)
+  const writeDiary = async () => {
+    if (writingDiary) return;
+    const hasDiary = entries.some(
+      (e) => e.role === "user" && e.body.startsWith(DIARY_MARKER)
+    );
+    if (
+      hasDiary &&
+      !window.confirm("今日の記を書き直します。前の清書は置き換わります。よろしいですか?")
+    )
+      return;
+    setWritingDiary(true);
+    try {
+      const res = await fetch("/api/diary", { method: "POST" });
+      const json = await res.json();
+      if (json.error) {
+        setError(json.error);
+        return;
+      }
+      load();
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    } finally {
+      setWritingDiary(false);
+    }
+  };
+
   const deleteEntry = async (id: string) => {
     if (!window.confirm("この記録を削除します。よろしいですか?")) return;
     const res = await fetch(`/api/entries?id=${id}`, { method: "DELETE" });
@@ -166,26 +194,38 @@ export default function DayView({ date }: { date: string }) {
               </span>
               <span className="absolute -left-[5px] top-2 h-2 w-2 rounded-full bg-sumi/60" />
               {entry.role === "user" ? (
-                <div className="rounded-lg border border-sumi/10 bg-white/60 p-3">
-                  {entry.photos.length > 0 && (
-                    <div className="mb-2 flex flex-wrap gap-2">
-                      {entry.photos.map((url) => (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          key={url}
-                          src={url}
-                          alt=""
-                          className="h-20 w-20 rounded object-cover"
-                        />
-                      ))}
-                    </div>
-                  )}
-                  {entry.body && (
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                      {entry.body}
+                entry.body.startsWith(DIARY_MARKER) ? (
+                  // 今日の記(清書された一日の日記)
+                  <div className="rounded-lg border border-sumi/30 bg-white/40 p-3">
+                    <span className="mb-1 inline-block rounded bg-sumi px-1.5 py-0.5 text-[10px] text-white">
+                      今日の記
+                    </span>
+                    <p className="whitespace-pre-wrap font-mincho text-sm leading-loose">
+                      {entry.body.slice(DIARY_MARKER.length).trimStart()}
                     </p>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-sumi/10 bg-white/60 p-3">
+                    {entry.photos.length > 0 && (
+                      <div className="mb-2 flex flex-wrap gap-2">
+                        {entry.photos.map((url) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={url}
+                            src={url}
+                            alt=""
+                            className="h-20 w-20 rounded object-cover"
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {entry.body && (
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                        {entry.body}
+                      </p>
+                    )}
+                  </div>
+                )
               ) : (
                 (() => {
                   const coach = coachLabelAndBody(entry);
@@ -230,6 +270,20 @@ export default function DayView({ date }: { date: string }) {
             </li>
           ))}
         </ol>
+        {isToday &&
+          entries.some(
+            (e) => e.role === "user" && !e.body.startsWith(DIARY_MARKER)
+          ) && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={writeDiary}
+                disabled={writingDiary}
+                className="rounded-full border border-sumi/30 px-4 py-2 font-mincho text-xs text-sumi-light disabled:opacity-40"
+              >
+                {writingDiary ? "つづっています…" : "今日の記をつづる"}
+              </button>
+            </div>
+          )}
         <div ref={bottomRef} />
       </main>
 
